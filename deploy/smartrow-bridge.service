@@ -1,0 +1,34 @@
+[Unit]
+Description=SmartRow -> SmartRow app + Peloton (FTMS) BLE bridge
+Wants=bluetooth.service
+After=bluetooth.service
+# Never give up restarting: no start-rate limit, the bridge is an appliance.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/smartrow-bridge
+Environment=PYTHONUNBUFFERED=1
+WorkingDirectory=/opt/smartrow-bridge
+
+# Pre-check ("-" = a failure here is logged but does not block the start):
+# clear any rfkill soft block. The bridge then waits by itself until bluetoothd
+# has powered both radios once (that loads the UB500's Realtek firmware) before
+# claiming the dongle - see adapters.wait_until_ready().
+ExecStartPre=-/usr/sbin/rfkill unblock bluetooth
+ExecStart=/opt/smartrow-bridge/venv/bin/python -m smartrow_bridge
+
+# Restart on any exit (crash, unhandled error, adapter unplugged), 5 s apart.
+Restart=always
+RestartSec=5
+# Give the app 10 s to disconnect cleanly, then kill it.
+TimeoutStartSec=30
+TimeoutStopSec=10
+KillMode=mixed
+
+# Raw HCI user channel (Bumble) needs CAP_NET_ADMIN/CAP_NET_RAW; simplest is root.
+User=root
+Nice=-5
+
+[Install]
+WantedBy=multi-user.target

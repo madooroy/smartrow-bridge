@@ -1,0 +1,176 @@
+"""Wires the pulley central (hci0) to the dual peripheral (hci1)."""
+
+from __future__ import annotations
+
+import asyncio
+import importlib
+import logging
+import time
+from typing import IO, TYPE_CHECKING
+
+from . import adapters, addresses, protocol
+from .central import PulleyLink
+from .config import Config
+
+if TYPE_CHECKING:  # imported for real in run(), in the background (see _load_peripheral_module)
+    from .peripheral import BridgePeripheral
+
+log = logging.getLogger(__name__)
+
+
+def _load_peripheral_module():
+    """Import the Bumble side (~1 s on a Pi 4). Runs in a thread while the pulley scan runs."""
+    started = time.monotonic()
+    module = importlib.import_module(".peripheral", __package__)
+    log.info("Peripheral stack loaded in %.1f s (in the background)", time.monotonic() - started)
+    return module
+
+POLL_INTERVAL_S = 2.0
+FTMS_INTERVAL_S = 1.0
+STATS_INTERVAL_S = 60.0
+
+
+class Bridge:
+    def __init__(self, cfg: Config) -> None:
+        self.cfg = cfg
+        self.parser = protocol.SmartRowParser()
+        self.peripheral: BridgePeripheral | None = None
+        self.link: PulleyLink | None = None
+        self._driver_initialized = False
+        self._challenge_requested = False
+        self._pulley_ready = False
+        self._pulley_packets = 0
+        self._sniff: IO[str] | None = None
+
+    # The pulley only streams after the "$\rV@\r" init, periodic "$" polls and,
+    # on V3 hardware, a KEYLOCK answer. The SmartRow app does all of that through
+    # the clone; the bridge only takes over while the app is not connected.
+    @property
+    def _bridge_drives_pulley(self) -> bool:
+        return self.cfg.drive_without_tablet and not (self.peripheral and self.peripheral.tablet_connected)
+
+    def _on_notify(self, uuid: str, handle: int, data: bytes) -> None:
+        # 1. Locked bypass: forward the untouched bytes first.
+        if self.peripheral is not None:
+            self.peripheral.forward_notification(handle, data)
+
+        if uuid != protocol.NOTIFY_CHAR_UUID:
+            return
+        self._pulley_packets += 1
+        if self._sniff is not None:
+            self._sniff.write(f"{data.hex(' ')}  {data!r}\n")
+            self._sniff.flush()
+
+        # 2. Translation path works on its own copy.
+        if self._bridge_drives_pulley:
+            if protocol.is_v3_version_reply(data) and not self._challenge_requested:
+                log.info("V3 pulley (%s); requesting KEYLOCK challenge", data.decode("ascii", "replace").strip())
+                self._challenge_requested = True
+                self.link.write_uuid(protocol.WRITE_CHAR_UUID, protocol.CHALLENGE_REQUEST, bytewise=True)
+            if b"KEYLOCK" in data:
+                log.info("Answering V3 KEYLOCK challenge")
+                self.link.write_uuid(protocol.WRITE_CHAR_UUID, protocol.keylock_response(data), bytewise=True)
+        self.parser.feed(data)
+
+    def _on_pulley_connected(self) -> None:
+        """Called once notifications are subscribed, so replies to our commands are seen."""
+        self._driver_initialized = False
+        self._challenge_requested = False
+        self._pulley_ready = True
+
+    async def _driver_loop(self) -> None:
+        while True:
+            if not self.link.connected:
+                self._pulley_ready = False
+            elif self._pulley_ready:
+                if not self._bridge_drives_pulley:
+                    self._driver_initialized = True  # the SmartRow app has it in hand
+                elif not self._driver_initialized:
+                    log.info("No SmartRow app attached; initialising pulley from the bridge")
+                    self.link.write_uuid(protocol.WRITE_CHAR_UUID, protocol.INIT_COMMAND, bytewise=True)
+                    self._driver_initialized = True
+                else:
+                    self.link.write_uuid(protocol.WRITE_CHAR_UUID, protocol.POLL_COMMAND)
+            await asyncio.sleep(POLL_INTERVAL_S)
+
+    async def _ftms_loop(self) -> None:
+        while True:
+            await asyncio.sleep(FTMS_INTERVAL_S)
+            snap = self.parser.snapshot()
+            try:
+                await self.peripheral.publish_rower_data(snap)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("FTMS notify failed: %s", exc)
+            log.debug("FTMS %d W, %.1f spm, %d m, %d s/500m", snap.power_w, snap.stroke_rate_spm,
+                      snap.distance_m, snap.pace_s_per_500m)
+
+    async def _stats_loop(self) -> None:
+        """Once a minute, while anything is flowing, log proof that data reaches both apps."""
+        last = (0, 0, 0)
+        while True:
+            await asyncio.sleep(STATS_INTERVAL_S)
+            p = self.peripheral
+            now = (self._pulley_packets, p.forwarded_to_smartrow, p.ftms_updates_sent)
+            pulley, smartrow, ftms_sent = (n - o for n, o in zip(now, last))
+            last = now
+            if pulley or smartrow or ftms_sent:
+                m = self.parser.metrics
+                log.info(
+                    "Data flow, last %d s: %d pulley packets in, %d forwarded to SmartRow app, "
+                    "%d FTMS updates to fitness app | %d m, %d strokes",
+                    STATS_INTERVAL_S, pulley, smartrow, ftms_sent, m.distance_m, m.stroke_count,
+                )
+            if self.parser.bad_checksums:
+                log.warning("%d pulley packets had bad checksums", self.parser.bad_checksums)
+                self.parser.bad_checksums = 0
+
+    async def run(self) -> None:
+        # Bumble is only needed once the pulley is connected, so load it in a thread
+        # while the radios are prepared and the pulley scan runs.
+        peripheral_module = asyncio.create_task(asyncio.to_thread(_load_peripheral_module))
+
+        central_hci, peripheral_hci = adapters.resolve(
+            self.cfg.central_adapter, self.cfg.peripheral_adapter, self.cfg.central_mac, self.cfg.peripheral_mac
+        )
+        await adapters.wait_until_ready([central_hci, peripheral_hci])
+        await adapters.prepare_central(central_hci)
+        adapters.release_from_bluez(peripheral_hci)
+        transport = self.cfg.peripheral_transport or f"hci-socket:{adapters.index_of(peripheral_hci)}"
+
+        # The virtual devices keep the same addresses on every boot (so the apps recognise
+        # them) but differ from one Pi to the next.
+        dongle_mac = adapters.read_mac(adapters.index_of(peripheral_hci))
+        clone_address = addresses.resolve(self.cfg.clone_address, dongle_mac, "clone")
+        fitness_address = addresses.resolve(self.cfg.fitness_address, dongle_mac, "fitness")
+
+        if self.cfg.sniff_log:
+            self._sniff = open(self.cfg.sniff_log, "a", encoding="utf-8")
+
+        self.link = PulleyLink(
+            adapter=central_hci,
+            address=self.cfg.pulley_address,
+            name_filter=self.cfg.pulley_name,
+            exclude_addresses=(clone_address, fitness_address),
+            on_notify=self._on_notify,
+        )
+        self.link.on_connected = self._on_pulley_connected
+        snapshot = await self.link.connect_first()
+        BridgePeripheral = (await peripheral_module).BridgePeripheral
+
+        try:
+            async with BridgePeripheral(
+                transport=transport,
+                clone_address=clone_address,
+                clone_name=self.cfg.clone_name or snapshot.name,
+                fitness_address=fitness_address,
+                fitness_name=self.cfg.fitness_name,
+                pulley=snapshot,
+                on_clone_write=self.link.write,
+            ) as peripheral:
+                self.peripheral = peripheral
+                await asyncio.gather(
+                    self.link.run(), self._driver_loop(), self._ftms_loop(), self._stats_loop()
+                )
+        finally:
+            if self._sniff is not None:
+                self._sniff.close()

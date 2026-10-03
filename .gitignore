@@ -1,0 +1,8 @@
+# Local backups of SD-card configuration: may contain credentials, never commit.
+sd-backup/
+
+# Full bridge journals: large and full of device addresses. Keep captures/sniff2.log (used by the tests).
+captures/bridge*.log
+
+__pycache__/
+*.pyc
