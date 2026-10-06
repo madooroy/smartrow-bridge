@@ -25,9 +25,13 @@ USB Bluetooth dongle (peripheral, Bumble): two advertising sets, two connections
 
 ## Status
 
-Working on the author's setup: SmartRow pulley firmware **V3.10**, Raspberry Pi 4,
-TP-Link UB500, SmartRow app on an Android tablet, Peloton app on an iPhone. Cold boot to both apps recording
-needs no interaction. Other firmware versions, dongles and apps are untested - reports welcome.
+Working on the author's setup: SmartRow pulley firmware **V3.10**, Raspberry Pi 4 and TP-Link UB500, with
+
+- the SmartRow app on an Android tablet (Lenovo), an iPhone and an iPad;
+- the Peloton app on an iPhone and an iPad.
+
+Cold boot to both apps recording needs no interaction. Other firmware versions, dongles and apps are
+untested - reports welcome.
 
 Peloton shows stroke rate, pace and heart rate live, and output (watts, kJ), distance and stroke count in the
 workout summary.
