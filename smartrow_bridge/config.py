@@ -22,9 +22,11 @@ class Config:
     clone_address: str | None
     fitness_name: str
     fitness_address: str | None
+    advertise_pulley_id: bool
     drive_without_tablet: bool
     sniff_log: str | None
     session_log: str
+    gatt_log: bool
     log_level: str
 
 
@@ -59,6 +61,10 @@ def parse(argv: list[str] | None = None) -> Config:
     p.add_argument("--fitness-address", default=_env("SRB_FITNESS_ADDRESS"),
                    help="static random address of the FTMS rower, different from the clone's "
                         "(default: derived from the dongle's MAC)")
+    p.add_argument("--no-pulley-id", dest="advertise_pulley_id", action="store_false",
+                   default=_env("SRB_ADVERTISE_PULLEY_ID", "1") not in ("0", "false", "no"),
+                   help="test: advertise the clone without the pulley's manufacturer data, "
+                        "as a device that cannot send it (iOS) would")
     p.add_argument("--no-drive", dest="drive_without_tablet", action="store_false",
                    default=_env("SRB_DRIVE_WITHOUT_TABLET", "1") not in ("0", "false", "no"),
                    help="never send init/poll/KEYLOCK to the pulley; rely on the SmartRow app")
@@ -66,5 +72,8 @@ def parse(argv: list[str] | None = None) -> Config:
                    help="append every raw pulley packet (hex + ascii) to this file")
     p.add_argument("--session-log", default=_env("SRB_SESSION_LOG", session_log.DEFAULT_PATH),
                    help="milestone record that survives shutdown ('off' to disable)")
+    p.add_argument("--gatt-log", action="store_true",
+                   default=_env("SRB_GATT_LOG", "0") in ("1", "true", "yes"),
+                   help="debugging: log every GATT request the apps make to the virtual devices")
     p.add_argument("--log-level", default=_env("SRB_LOG_LEVEL", "INFO"))
     return Config(**vars(p.parse_args(argv)))

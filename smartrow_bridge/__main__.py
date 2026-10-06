@@ -26,6 +26,8 @@ def main() -> None:
         format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
     )
     logging.getLogger("smartrow_bridge").setLevel(level)
+    if cfg.gatt_log:
+        logging.getLogger("bumble.gatt_server").setLevel(logging.DEBUG)
     if cfg.session_log.lower() != "off":
         session_log.install(cfg.session_log)
     try:

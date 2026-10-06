@@ -165,6 +165,7 @@ class Bridge:
                 fitness_address=fitness_address,
                 fitness_name=self.cfg.fitness_name,
                 pulley=snapshot,
+                advertise_pulley_id=self.cfg.advertise_pulley_id,
                 on_clone_write=self.link.write,
             ) as peripheral:
                 self.peripheral = peripheral

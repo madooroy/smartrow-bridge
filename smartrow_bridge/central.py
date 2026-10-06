@@ -116,12 +116,14 @@ class PulleyLink:
                 await asyncio.sleep(RETRY_DELAY_S)
         self.address = device.address.upper()  # reconnect to this exact pulley from now on
 
+        # In handle order, so the clone's layout is the pulley's on every run: BlueZ lists
+        # characteristics in no fixed order, and iOS remembers a device's layout.
         services: list[ServiceSpec] = []
-        for service in client.services:
+        for service in sorted(client.services, key=lambda s: s.handle):
             if service.uuid.lower() in _SKIP_SERVICES:
                 continue
             spec = ServiceSpec(uuid=service.uuid.lower())
-            for char in service.characteristics:
+            for char in sorted(service.characteristics, key=lambda c: c.handle):
                 props = frozenset(char.properties)
                 value = b""
                 if "read" in props:

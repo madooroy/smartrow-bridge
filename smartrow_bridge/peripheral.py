@@ -25,7 +25,7 @@ from bumble.hci import Address
 from bumble.transport import open_transport
 
 from . import advertising, ftms
-from .gatt_spec import CharSpec, PulleySnapshot
+from .gatt_spec import CharSpec, PulleySnapshot, short_uuid
 from .protocol import RowingMetrics
 
 log = logging.getLogger(__name__)
@@ -48,6 +48,11 @@ _PROPERTIES = {
 CloneWriteCallback = Callable[[int, bytes], None]  # (pulley handle, data)
 
 
+def _clone_uuid(uuid: str) -> UUID:
+    short = short_uuid(uuid)
+    return UUID(uuid) if short is None else UUID.from_16_bits(short)
+
+
 class BridgePeripheral:
     def __init__(
         self,
@@ -58,6 +63,7 @@ class BridgePeripheral:
         fitness_name: str,
         pulley: PulleySnapshot,
         on_clone_write: CloneWriteCallback,
+        advertise_pulley_id: bool = True,
     ) -> None:
         self.transport_spec = transport
         self.clone_address = clone_address
@@ -66,6 +72,9 @@ class BridgePeripheral:
         self.fitness_name = fitness_name
         self.pulley = pulley
         self.on_clone_write = on_clone_write
+        # The pulley ID the SmartRow app shows as "SmartRow-<id>". Left out only to test
+        # whether the app accepts a clone without it (iOS cannot advertise it).
+        self.manufacturer_data = pulley.manufacturer_data if advertise_pulley_id else {}
 
         self._legacy_advertising = False
         self._transport = None
@@ -110,7 +119,7 @@ class BridgePeripheral:
         else:
             value = spec.value
 
-        char = Characteristic(UUID(spec.uuid), props, permissions, value)
+        char = Characteristic(_clone_uuid(spec.uuid), props, permissions, value)
         if {"notify", "indicate"} & spec.properties:
             char.on("subscription", self._on_clone_subscription)
         return char
@@ -138,7 +147,7 @@ class BridgePeripheral:
                 char = self._clone_characteristic(spec)
                 self._clone_by_handle[spec.handle] = char
                 chars.append(char)
-            services.append(Service(UUID(svc.uuid), chars))
+            services.append(Service(_clone_uuid(svc.uuid), chars))
 
         self._rower_data = Characteristic(
             UUID.from_16_bits(ftms.ROWER_DATA_UUID_16),
@@ -210,7 +219,7 @@ class BridgePeripheral:
             log.warning("Extended advertising unavailable (%s); falling back to one combined "
                         "advertisement named %r", exc, self.clone_name)
             self._legacy_advertising = True
-            adv, scan_rsp = advertising.combined(self.clone_name, self.pulley.manufacturer_data)
+            adv, scan_rsp = advertising.combined(self.clone_name, self.manufacturer_data)
             self.device.advertising_data = adv
             self.device.scan_response_data = scan_rsp
             self.device.advertising_interval_min = ADVERTISING_INTERVAL_MS
@@ -230,7 +239,7 @@ class BridgePeripheral:
         )
         sets = (
             ("SmartRow app", self.clone_address, self.clone_name,
-             advertising.smartrow(self.clone_name, self.pulley.manufacturer_data)),
+             advertising.smartrow(self.clone_name, self.manufacturer_data)),
             ("fitness apps", self.fitness_address, self.fitness_name,
              advertising.fitness(self.fitness_name)),
         )
@@ -243,6 +252,8 @@ class BridgePeripheral:
                 auto_restart=True,
             )
             log.info("Advertising %r at %s for the %s", name, address, audience)
+        if not self.manufacturer_data:
+            log.warning("Pulley ID (manufacturer data) is NOT advertised - SRB_ADVERTISE_PULLEY_ID=0 test mode")
 
     async def __aexit__(self, *exc) -> None:
         for task in self._tasks:
@@ -251,7 +262,14 @@ class BridgePeripheral:
             await self._transport.close()
 
     def _on_connection(self, connection: Connection) -> None:
-        log.info("Central connected: %s (connection 0x%04X)", connection.peer_address, connection.handle)
+        own = str(getattr(connection, "self_address", "")).upper()
+        if own.startswith(self.clone_address.upper()):
+            target = f"to {self.clone_name!r}"
+        elif own.startswith(self.fitness_address.upper()):
+            target = f"to {self.fitness_name!r}"
+        else:
+            target = f"at {own or 'unknown address'}"
+        log.info("Central connected %s: %s (connection 0x%04X)", target, connection.peer_address, connection.handle)
 
         def on_disconnection(reason: int) -> None:
             log.info("Central disconnected: %s (reason 0x%02X)", connection.peer_address, reason)

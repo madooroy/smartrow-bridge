@@ -128,10 +128,12 @@ Common problems:
 | `SRB_FITNESS_NAME` | `Rower` | The name fitness apps see |
 | `SRB_CLONE_NAME` | the pulley's name | The name the SmartRow app sees |
 | `SRB_CLONE_ADDRESS`, `SRB_FITNESS_ADDRESS` | derived from the dongle's MAC | Addresses of the two virtual devices: the same on every boot, unique per Pi |
+| `SRB_ADVERTISE_PULLEY_ID` | `1` | Test only: `0` advertises the clone without the pulley ID (manufacturer data), as an iPhone would; change `SRB_CLONE_ADDRESS` too so the app sees a new device |
 | `SRB_CENTRAL_MAC`, `SRB_PERIPHERAL_MAC` | empty | Empty = built-in radio for the pulley, USB dongle for the apps; set the radios' MACs to pin them |
 | `SRB_DRIVE_WITHOUT_TABLET` | `1` | The bridge runs the pulley's start-up handshake itself when the SmartRow app is not connected, so the fitness app works alone |
 | `SRB_SESSION_LOG` | `/var/lib/smartrow-bridge/sessions.log` | Session record that survives shutdown; `off` disables |
 | `SRB_SNIFF_LOG` | empty | Append every raw pulley packet to this file |
+| `SRB_GATT_LOG` | empty | `1` logs every GATT request the apps make to the virtual devices (verbose) |
 | `SRB_LOG_LEVEL` | `INFO` | `DEBUG` adds a line per second |
 
 ## How it works
@@ -161,6 +163,11 @@ Tests (no Bluetooth needed): `python -m unittest discover -s tests -t .` - they 
 
 Service `0x1234`; `0x1235` write without response; `0x1236` read + notify. The pulley advertises its ID as
 manufacturer data under company id `0x1235` (the SmartRow app shows it as `SmartRow-<id>`).
+
+What the SmartRow app needs from a clone (tested with the Android and iOS apps): the iOS app lists a device
+only if that manufacturer data is advertised, and after connecting it uses the service only if `0x1234`,
+`0x1235` and `0x1236` are declared as 16-bit UUIDs. The Android app accepts a clone without the manufacturer
+data (it lists it as plain `SmartRow`) and with either UUID form.
 
 Handshake: write `$\rV@\r` → version reply (`SmartRow 'V3.10'`) → write `#` → `KEYLOCK=…` → answer → records
 stream at about 10 per second.

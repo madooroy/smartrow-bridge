@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from smartrow_bridge import advertising, ftms, protocol
+from smartrow_bridge.gatt_spec import short_uuid
 from smartrow_bridge.protocol import RowingMetrics, SmartRowParser
 
 
@@ -188,6 +189,14 @@ class FtmsTest(unittest.TestCase):
         self.assertIsNone(ftms.control_point_response(b""))
 
 
+class GattSpecTest(unittest.TestCase):
+    def test_short_uuid(self):
+        self.assertEqual(short_uuid("00001234-0000-1000-8000-00805F9B34FB"), 0x1234)
+        self.assertEqual(short_uuid("00001236-0000-1000-8000-00805f9b34fb"), 0x1236)
+        self.assertIsNone(short_uuid("12341234-0000-1000-8000-00805f9b34fb"))
+        self.assertIsNone(short_uuid("da2b84f1-6279-48de-bdc0-afbea0226079"))
+
+
 class AdvertisingTest(unittest.TestCase):
     PULLEY_MFR = {0x1235: b"07"}  # as advertised by the real pulley
 
@@ -207,6 +216,13 @@ class AdvertisingTest(unittest.TestCase):
         self.assertNotIn(struct.pack("<H", 0x1826), adv)
         self.assertIn(b"\x09SmartRow", adv)
         self.assertIn(b"\x05\xff" + struct.pack("<H", 0x1235) + b"07", rsp)
+
+    def test_smartrow_set_without_pulley_id(self):
+        adv, rsp = advertising.smartrow("SmartRow", {})
+        self.assertIn(b"\x03\x03" + struct.pack("<H", 0x1234), adv)
+        self.assertIn(b"\x09SmartRow", adv)
+        for payload in (adv, rsp):
+            self.assertNotIn(b"\xff" + struct.pack("<H", 0x1235), payload)
 
     def test_combined_fallback_fits(self):
         adv, rsp = advertising.combined("SmartRow 12345678901234567890", self.PULLEY_MFR)
