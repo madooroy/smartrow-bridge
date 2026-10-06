@@ -51,7 +51,20 @@ Why two radios: the built-in radio is the *client* of the pulley, and the dongle
 
 ## Install
 
-On the Pi, over SSH, with the dongle plugged in:
+### 1. Prepare the Pi
+
+Skip this if your Pi already runs Raspberry Pi OS Lite (64-bit) and you can reach it over SSH.
+
+1. Flash **Raspberry Pi OS Lite (64-bit)** to the microSD card with
+   [Raspberry Pi Imager](https://www.raspberrypi.com/software/). In its settings, set a user name and
+   password, enter your Wi-Fi network, and enable SSH.
+2. Put the card in the Pi, plug in the USB Bluetooth dongle and power the Pi on. The first boot takes a
+   minute or two.
+3. Connect from your computer: `ssh <user>@<hostname>.local`, with the user and hostname you set in the Imager.
+
+### 2. Install the bridge
+
+On the Pi, over SSH, with the USB Bluetooth dongle plugged in:
 
 ```bash
 sudo apt-get update && sudo apt-get install -y git
@@ -63,13 +76,19 @@ sudo bash install.sh
 The installer puts the code in `/opt/smartrow-bridge`, creates the `smartrow-bridge` service (starts on every
 boot) and the settings file `/etc/default/smartrow-bridge`. No settings are required.
 
-Then pull the handle to wake the pulley and check:
+No reboot is needed: the bridge starts as soon as the installer finishes, and from then on at every boot.
+
+### 3. Check it
+
+Pull the handle to wake the pulley, then run:
 
 ```bash
 sudo bash ~/smartrow-bridge/tools/health_check.sh
 ```
 
-### Pair the apps (once)
+If the check cannot find the USB Bluetooth dongle, reboot once (`sudo reboot`) and run it again.
+
+### 4. Pair the apps (once)
 
 1. **SmartRow app**: forget your pulley, then pair the one that appears as **`SmartRow-<number>`** - the same
    number as before, because the bridge copies the pulley's ID. From then on it reconnects by itself.
