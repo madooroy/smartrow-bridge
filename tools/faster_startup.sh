@@ -1,26 +1,27 @@
 #!/usr/bin/env bash
-# Optional: make the Pi start faster (about 7 s less from power-on to the bridge being
+# Optional: make the Pi start faster (about 4 s less from power-on to the bridge being
 # visible on a Pi 4). It changes the Pi's boot settings, not the bridge.
 #
 #   sudo bash ~/smartrow-bridge/tools/faster_startup.sh           apply, then reboot
-#   sudo bash ~/smartrow-bridge/tools/faster_startup.sh --undo    put everything back
+#   sudo bash ~/smartrow-bridge/tools/faster_startup.sh --undo    put everything back, then reboot
 #
 # What it changes:
 #   1. /boot/firmware/config.txt  - no firmware pause or splash screen, no camera/display
 #                                   probing, no initramfs (not needed to boot from an SD card).
-#   2. /boot/firmware/cmdline.txt - cloud-init=disabled: skips the first-boot configuration
-#                                   service on every later boot.
-#   3. Bootloader (Pi 4 only)     - NET_INSTALL_AT_POWER_ON=0: no wait for a keyboard at power-on.
+#   2. Bootloader (Pi 4 only)     - NET_INSTALL_AT_POWER_ON=0: no wait for a keyboard at power-on.
 #                                   This is stored on the Pi's board, not on the SD card.
-# The first time it runs it keeps the original files next to the changed ones as
-# config.txt.before-speedup and cmdline.txt.before-speedup. Both are on the SD card's boot
-# partition, which any computer can read: if the Pi ever fails to start, put the card in
-# a computer and copy them back over config.txt and cmdline.txt.
+# The first time it runs it keeps the original file next to the changed one as
+# config.txt.before-speedup. It is on the SD card's boot partition, which any computer can
+# read: if the Pi ever fails to start, put the card in a computer and copy it back over
+# config.txt.
+#
+# It deliberately leaves cloud-init alone. Disabling it (cloud-init=disabled in cmdline.txt)
+# would save another 2 s, but on a card set up with Raspberry Pi Imager the Pi then no
+# longer joins the Wi-Fi.
 set -euo pipefail
 
-BOOT=${BOOT_DIR:-/boot/firmware}  # BOOT_DIR: try it on copies of the two files
+BOOT=${BOOT_DIR:-/boot/firmware}  # BOOT_DIR: try it on a copy of the file
 CONFIG=$BOOT/config.txt
-CMDLINE=$BOOT/cmdline.txt
 SUFFIX=.before-speedup
 UNDO=0
 [[ ${1:-} == --undo ]] && UNDO=1
@@ -29,9 +30,7 @@ if [[ -z ${BOOT_DIR:-} && $EUID -ne 0 ]]; then
     echo "Run as root: sudo bash $0" >&2
     exit 1
 fi
-for f in "$CONFIG" "$CMDLINE"; do
-    [[ -f $f ]] || { echo "$f not found - is this Raspberry Pi OS?" >&2; exit 1; }
-done
+[[ -f $CONFIG ]] || { echo "$CONFIG not found - is this Raspberry Pi OS?" >&2; exit 1; }
 
 # Set NET_INSTALL_AT_POWER_ON in the bootloader configuration (Raspberry Pi 4 only).
 set_net_install() {
@@ -56,23 +55,19 @@ set_net_install() {
 
 if [[ $UNDO -eq 1 ]]; then
     echo "== Undoing the faster start-up settings =="
-    for f in "$CONFIG" "$CMDLINE"; do
-        if [[ -f $f$SUFFIX ]]; then
-            cp "$f$SUFFIX" "$f"
-            echo "   restored $f"
-        else
-            echo "   $f: no $SUFFIX copy, left as it is"
-        fi
-    done
+    if [[ -f $CONFIG$SUFFIX ]]; then
+        cp "$CONFIG$SUFFIX" "$CONFIG"
+        echo "   restored $CONFIG"
+    else
+        echo "   $CONFIG: no $SUFFIX copy, left as it is"
+    fi
     set_net_install 1
     echo "Done. Reboot to apply: sudo reboot"
     exit 0
 fi
 
 echo "== Faster start-up =="
-for f in "$CONFIG" "$CMDLINE"; do
-    [[ -f $f$SUFFIX ]] || cp "$f" "$f$SUFFIX"
-done
+[[ -f $CONFIG$SUFFIX ]] || cp "$CONFIG" "$CONFIG$SUFFIX"
 
 # config.txt: change a setting where it already is, otherwise add it under [all] at the end.
 missing=()
@@ -94,15 +89,7 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 echo "   $CONFIG: camera_auto_detect=0 display_auto_detect=0 auto_initramfs=0 boot_delay=0 disable_splash=1"
 
-# cmdline.txt is one line; the option goes at its end.
-if grep -qw 'cloud-init=disabled' "$CMDLINE"; then
-    echo "   $CMDLINE: cloud-init=disabled already set"
-else
-    sed -i '1 s/[[:space:]]*$/ cloud-init=disabled/' "$CMDLINE"
-    echo "   $CMDLINE: added cloud-init=disabled"
-fi
-
 set_net_install 0
 
 echo "Done. Reboot to apply: sudo reboot"
-echo "Originals kept as $CONFIG$SUFFIX and $CMDLINE$SUFFIX"
+echo "Original kept as $CONFIG$SUFFIX"
