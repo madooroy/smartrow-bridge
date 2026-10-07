@@ -126,6 +126,7 @@ the SD card and power supply. It works after a reboot too: the bridge keeps a sm
 | `tools/pulley_rssi.py` | Live signal strength of the pulley link. Aim for −75 dBm or better; move the Pi closer if not |
 | `tools/sniff_pulley.py` | Connects to the pulley directly and prints its services and raw packets (stop the bridge first) |
 | `tools/setup_shutdown_shortcut.sh` | Lets an iOS Shortcut shut the Pi down, and nothing else |
+| `tools/faster_startup.sh` | Optional boot-time tuning of the Pi, see [faster start-up](#optional-faster-start-up) |
 
 Live log: `journalctl -u smartrow-bridge -f`. Raspberry Pi OS keeps the log in memory, so save it before
 shutting down if you want to share it: `journalctl -u smartrow-bridge -b --no-pager > ~/bridge.log`.
@@ -207,16 +208,49 @@ checksum of bytes 0-13 (bytes 14-15), CR.
 
 ## Optional: faster start-up
 
-Measured on a Pi 4, from power-on to `Rower` visible in a Bluetooth scanner: about 26 s → 19 s. These change
-the Pi, not this project; each can be undone by reverting the line (the files are on the SD card's boot
-partition, readable from any computer).
+The bridge works without this. It shortens the time from power-on to the bridge being visible by about 7 s
+(measured on a Pi 4 with a Bluetooth scanner: about 26 s before, 19 s after) by changing the Pi's own boot
+settings.
+
+1. Apply the settings and reboot:
+
+   ```bash
+   sudo bash ~/smartrow-bridge/tools/faster_startup.sh
+   sudo reboot
+   ```
+
+2. After the reboot, pull the handle, then check that the bridge is running as before:
+
+   ```bash
+   sudo bash ~/smartrow-bridge/tools/health_check.sh
+   ```
+
+To see the gain yourself, run this before step 1 and again after step 2. The number in square brackets is the
+time in seconds from the start of Linux to the bridge advertising (pull the handle right after power-on, or
+it mostly measures how long the pulley took to wake):
+
+```bash
+journalctl -u smartrow-bridge -b -o short-monotonic | grep -m1 "Advertising 'Rower'"
+```
+
+What the script changes:
 
 | Where | Change | Effect |
 |---|---|---|
-| `/boot/firmware/config.txt` | `boot_delay=0` and `disable_splash=1` under `[all]`; `camera_auto_detect=0`, `display_auto_detect=0` | No firmware pause, splash or probing |
+| `/boot/firmware/config.txt` | `boot_delay=0`, `disable_splash=1`, `camera_auto_detect=0`, `display_auto_detect=0` | No firmware pause, splash screen or probing for cameras and displays |
 | `/boot/firmware/config.txt` | `auto_initramfs=0` | Skips loading the initramfs (not needed to boot from the SD card) |
-| `/boot/firmware/cmdline.txt` | append ` cloud-init=disabled` to the single line | Removes cloud-init from every boot (~2.4 s). You can then no longer reconfigure the Pi by editing `user-data` on the card until you remove it |
-| Bootloader | `NET_INSTALL_AT_POWER_ON=0` via `rpi-eeprom-config` | No USB keyboard wait at power-on |
+| `/boot/firmware/cmdline.txt` | adds `cloud-init=disabled` | Skips the first-boot configuration service on every later boot (about 2.4 s) |
+| Bootloader (Pi 4 only) | `NET_INSTALL_AT_POWER_ON=0` | No wait for a keyboard at power-on. Stored on the Pi's board, not on the SD card |
+
+Things to know:
+
+- **Do it after the install works**, not before: cloud-init is what applies the Wi-Fi, user and SSH settings
+  from Raspberry Pi Imager on the first boot.
+- **A new camera or DSI display** would no longer be detected automatically.
+- **Undo:** `sudo bash ~/smartrow-bridge/tools/faster_startup.sh --undo`, then reboot.
+- **If the Pi does not start afterwards:** the script keeps the originals as `config.txt.before-speedup` and
+  `cmdline.txt.before-speedup` on the SD card's boot partition, which any computer can read. Put the card in
+  a computer and copy them back over `config.txt` and `cmdline.txt`.
 
 ## Acknowledgements
 
