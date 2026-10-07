@@ -28,7 +28,7 @@ USB Bluetooth dongle (peripheral, Bumble): two advertising sets, two connections
 Working on the author's setup: SmartRow pulley firmware **V3.10**, Raspberry Pi 4 and TP-Link UB500, with
 
 - the SmartRow app on an Android tablet (Lenovo), an iPhone and an iPad;
-- the Peloton app on an iPhone and an iPad.
+- the Peloton app on an Android tablet (Lenovo), an iPhone and an iPad.
 
 Cold boot to both apps recording needs no interaction. Other firmware versions, dongles and apps are
 untested - reports welcome.
@@ -85,8 +85,6 @@ Pull the handle to wake the pulley, then run:
 ```bash
 sudo bash ~/smartrow-bridge/tools/health_check.sh
 ```
-
-If the check cannot find the USB Bluetooth dongle, reboot once (`sudo reboot`) and run it again.
 
 ### 4. Pair the apps (once)
 

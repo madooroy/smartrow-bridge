@@ -68,7 +68,7 @@ if [[ -f $ENV_FILE ]]; then
     if grep -qE '^SRB_CENTRAL_MAC=.+' "$ENV_FILE" && grep -qE '^SRB_PERIPHERAL_MAC=.+' "$ENV_FILE"; then
         ok "adapters pinned by MAC"
     else
-        warn "SRB_CENTRAL_MAC / SRB_PERIPHERAL_MAC not set - adapters chosen by bus type instead"
+        ok "adapters chosen by type (built-in radio for the pulley, USB dongle for the apps)"
     fi
 else
     warn "$ENV_FILE missing - defaults in use"
