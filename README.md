@@ -268,11 +268,12 @@ on a Pi 4 (roughly 26 s to 19 s, measured with a Bluetooth scanner) by changing 
    ```
 
 To see the gain yourself, run this before step 1 and again after step 2. The number in square brackets is the
-time in seconds from the start of Linux to the bridge advertising (pull the handle right after power-on, or
-it mostly measures how long the pulley took to wake):
+time in seconds from the start of Linux to the bridge being ready and looking for the pulley (about 7 s on a
+Pi 4 with these settings). It only means something after a normal power-on or reboot, not in the session in
+which you ran the installer.
 
 ```bash
-journalctl -u smartrow-bridge -b -o short-monotonic | grep -m1 "Advertising 'Rower'"
+journalctl -u smartrow-bridge -b -o short-monotonic | grep -m1 "Scanning"
 ```
 
 What the script changes:
