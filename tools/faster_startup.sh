@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Optional: make the Pi start faster (about 4 s less from power-on to the bridge being
+# Optional: make the Pi start faster (about 7 s less from power-on to the bridge being
 # visible on a Pi 4). It changes the Pi's boot settings, not the bridge.
 #
 #   sudo bash ~/smartrow-bridge/tools/faster_startup.sh           apply, then reboot
@@ -8,20 +8,22 @@
 # What it changes:
 #   1. /boot/firmware/config.txt  - no firmware pause or splash screen, no camera/display
 #                                   probing, no initramfs (not needed to boot from an SD card).
-#   2. Bootloader (Pi 4 only)     - NET_INSTALL_AT_POWER_ON=0: no wait for a keyboard at power-on.
+#   2. /boot/firmware/cmdline.txt - adds cloud-init=disabled: the first-boot configuration
+#                                   service no longer runs on every boot. Wi-Fi, user and SSH
+#                                   stay as they are; the Pi just stops reading the set-up
+#                                   files Raspberry Pi Imager left on the card.
+#   3. Bootloader (Pi 4 only)     - NET_INSTALL_AT_POWER_ON=0: no wait for a keyboard at power-on.
 #                                   This is stored on the Pi's board, not on the SD card.
-# The first time it runs it keeps the original file next to the changed one as
-# config.txt.before-speedup. It is on the SD card's boot partition, which any computer can
-# read: if the Pi ever fails to start, put the card in a computer and copy it back over
-# config.txt.
-#
-# It deliberately leaves cloud-init alone. Disabling it (cloud-init=disabled in cmdline.txt)
-# would save another 2 s, but on a card set up with Raspberry Pi Imager the Pi then no
-# longer joins the Wi-Fi.
+# The first time it runs it keeps the original config.txt next to the changed one as
+# config.txt.before-speedup. Both files are on the SD card's boot partition, which any
+# computer can read: if the Pi ever fails to start, put the card in a computer, copy
+# config.txt.before-speedup back over config.txt, and delete the words cloud-init=disabled
+# from the end of cmdline.txt.
 set -euo pipefail
 
-BOOT=${BOOT_DIR:-/boot/firmware}  # BOOT_DIR: try it on a copy of the file
+BOOT=${BOOT_DIR:-/boot/firmware}  # BOOT_DIR: try it on copies of the two files
 CONFIG=$BOOT/config.txt
+CMDLINE=$BOOT/cmdline.txt
 SUFFIX=.before-speedup
 UNDO=0
 [[ ${1:-} == --undo ]] && UNDO=1
@@ -30,7 +32,9 @@ if [[ -z ${BOOT_DIR:-} && $EUID -ne 0 ]]; then
     echo "Run as root: sudo bash $0" >&2
     exit 1
 fi
-[[ -f $CONFIG ]] || { echo "$CONFIG not found - is this Raspberry Pi OS?" >&2; exit 1; }
+for f in "$CONFIG" "$CMDLINE"; do
+    [[ -f $f ]] || { echo "$f not found - is this Raspberry Pi OS?" >&2; exit 1; }
+done
 
 # Set NET_INSTALL_AT_POWER_ON in the bootloader configuration (Raspberry Pi 4 only).
 set_net_install() {
@@ -61,6 +65,12 @@ if [[ $UNDO -eq 1 ]]; then
     else
         echo "   $CONFIG: no $SUFFIX copy, left as it is"
     fi
+    if grep -qw 'cloud-init=disabled' "$CMDLINE"; then
+        sed -i 's/[[:space:]]*cloud-init=disabled//g' "$CMDLINE"
+        echo "   $CMDLINE: removed cloud-init=disabled"
+    else
+        echo "   $CMDLINE: cloud-init=disabled was not set"
+    fi
     set_net_install 1
     echo "Done. Reboot to apply: sudo reboot"
     exit 0
@@ -88,6 +98,14 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     } >>"$CONFIG"
 fi
 echo "   $CONFIG: camera_auto_detect=0 display_auto_detect=0 auto_initramfs=0 boot_delay=0 disable_splash=1"
+
+# cmdline.txt is one line; the option goes at its end.
+if grep -qw 'cloud-init=disabled' "$CMDLINE"; then
+    echo "   $CMDLINE: cloud-init=disabled already set"
+else
+    sed -i '1 s/[[:space:]]*$/ cloud-init=disabled/' "$CMDLINE"
+    echo "   $CMDLINE: added cloud-init=disabled"
+fi
 
 set_net_install 0
 

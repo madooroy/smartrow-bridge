@@ -251,8 +251,8 @@ the same key. A second phone needs its own key: repeat all four steps on it.
 
 ## Optional: faster start-up
 
-The bridge works without this. It shortens the time from power-on to the bridge being visible by about 4 s
-on a Pi 4 (roughly 26 s to 22 s, measured with a Bluetooth scanner) by changing the Pi's own boot settings.
+The bridge works without this. It shortens the time from power-on to the bridge being visible by about 7 s
+on a Pi 4 (roughly 26 s to 19 s, measured with a Bluetooth scanner) by changing the Pi's own boot settings.
 
 1. Apply the settings and reboot:
 
@@ -281,18 +281,22 @@ What the script changes:
 |---|---|---|
 | `/boot/firmware/config.txt` | `boot_delay=0`, `disable_splash=1`, `camera_auto_detect=0`, `display_auto_detect=0` | No firmware pause, splash screen or probing for cameras and displays |
 | `/boot/firmware/config.txt` | `auto_initramfs=0` | Skips loading the initramfs (not needed to boot from the SD card) |
+| `/boot/firmware/cmdline.txt` | adds `cloud-init=disabled` | The first-boot configuration service no longer runs on every boot (about 2 s) |
 | Bootloader (Pi 4 only) | `NET_INSTALL_AT_POWER_ON=0` | No wait for a keyboard at power-on. Stored on the Pi's board, not on the SD card |
 
 Things to know:
 
+- **Do it after the install works.** The Wi-Fi, user and SSH settings from Raspberry Pi Imager are applied
+  by cloud-init on the first boot. Once that has happened they stay; with cloud-init off the Pi only stops
+  reading the Imager's set-up files on the card, so editing those files later has no effect until you undo.
+- **SSH may answer a little later than the bridge.** The bridge is ready about 10 s after Linux starts, the
+  Wi-Fi about 10 s after that, and your computer may need longer still to find the Pi by name. That is the
+  same with or without these settings.
 - **A new camera or DSI display** would no longer be detected automatically.
 - **Undo:** `sudo bash ~/smartrow-bridge/tools/faster_startup.sh --undo`, then reboot.
-- **If the Pi does not start afterwards:** the script keeps the original as `config.txt.before-speedup` on
-  the SD card's boot partition, which any computer can read. Put the card in a computer and copy it back
-  over `config.txt`.
-- **Not included, on purpose:** adding `cloud-init=disabled` to `/boot/firmware/cmdline.txt` saves about
-  another 2 s, but on a card set up with Raspberry Pi Imager the Pi then no longer joins the Wi-Fi, and you
-  have to remove the option again from a computer. Only consider it if you manage the Pi's Wi-Fi yourself.
+- **If the Pi does not start afterwards:** both files are on the SD card's boot partition, which any
+  computer can read. Put the card in a computer, copy `config.txt.before-speedup` back over `config.txt`,
+  and delete the words `cloud-init=disabled` from the end of `cmdline.txt`.
 
 ## Acknowledgements
 
