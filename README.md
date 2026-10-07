@@ -101,7 +101,7 @@ connection.
    connected, about 20 s after power-on.
 2. Open the SmartRow app and/or your fitness app. Row.
 3. Shut the Pi down before cutting power (`sudo shutdown -h now`, wait for the green LED to go dark).
-   `tools/setup_shutdown_shortcut.sh` sets up a one-tap iOS Shortcut for that.
+   To do that with one tap on an iPhone, see [switching the Pi off from an iPhone](#optional-switch-the-pi-off-from-an-iphone).
 
 Updating: `cd ~/smartrow-bridge && git pull && sudo bash install.sh`.
 
@@ -125,7 +125,7 @@ the SD card and power supply. It works after a reboot too: the bridge keeps a sm
 | `tools/check_adapters.py` | Lists both radios (MAC, type, USB ID) and scans with each |
 | `tools/pulley_rssi.py` | Live signal strength of the pulley link. Aim for −75 dBm or better; move the Pi closer if not |
 | `tools/sniff_pulley.py` | Connects to the pulley directly and prints its services and raw packets (stop the bridge first) |
-| `tools/setup_shutdown_shortcut.sh` | Lets an iOS Shortcut shut the Pi down, and nothing else |
+| `tools/setup_shutdown_shortcut.sh` | Lets an iOS Shortcut shut the Pi down, and nothing else, see [switching the Pi off from an iPhone](#optional-switch-the-pi-off-from-an-iphone) |
 | `tools/faster_startup.sh` | Optional boot-time tuning of the Pi, see [faster start-up](#optional-faster-start-up) |
 
 Live log: `journalctl -u smartrow-bridge -f`. Raspberry Pi OS keeps the log in memory, so save it before
@@ -205,6 +205,49 @@ checksum of bytes 0-13 (bytes 14-15), CR.
 | `e` | instantaneous split `mss` [6:9], average split [9:12] |
 | `f` | `!` at [11] = rowing stopped |
 | `b`, `x`/`y`/`z` | work and stroke length, force curve (passed through, not translated) |
+
+## Optional: switch the Pi off from an iPhone
+
+The Pi should be shut down before its power is cut. This sets up a button on your iPhone or iPad that does
+it with one tap, with no password and no SSH app. The phone gets a key that can do exactly one thing on the
+Pi: shut it down.
+
+1. **Create the shortcut.** In the **Shortcuts** app, tap **+**, add the action **Run Script Over SSH**, and
+   fill it in:
+
+   | Field | Value |
+   |---|---|
+   | Host | your Pi's name, e.g. `raspberrypi.local` |
+   | Port | `22` |
+   | User | your user on the Pi, e.g. `pi` |
+   | Authentication | **SSH Key** |
+   | Script | `sudo -n /usr/sbin/shutdown -h now` |
+
+   Name the shortcut, e.g. **Pi Off**.
+
+2. **Copy the phone's public key.** In the same action, tap the **SSH Key** row and choose **Copy Public
+   Key**. Get that line of text to the computer you use for SSH - for example paste it into a note or an
+   e-mail to yourself. It starts with `ssh-ed25519` or `ssh-rsa`. It is not a secret.
+
+3. **Authorise it on the Pi.** Over SSH, as your normal user (not with `sudo`):
+
+   ```bash
+   bash ~/smartrow-bridge/tools/setup_shutdown_shortcut.sh
+   ```
+
+   Paste the public key when it asks. It should end with `OK: ... is allowed without a password`.
+
+4. **Try it.** Tap the shortcut. The Pi's green LED blinks for a few seconds and then stays dark: now it is
+   safe to cut the power. To have it on your home screen, use **Add to Home Screen** in the shortcut's
+   menu.
+
+What the script sets up on the Pi: a rule that lets your user run `shutdown -h now` without a password, and
+an entry in `~/.ssh/authorized_keys` that forces the phone's key to run only that command - it cannot open a
+shell or do anything else. To remove it again, delete that line from `~/.ssh/authorized_keys` and the file
+`/etc/sudoers.d/010-<user>-shutdown`.
+
+The setup belongs to the SD card: after re-flashing the card or moving to a new one, run step 3 again with
+the same key. A second phone needs its own key: repeat all four steps on it.
 
 ## Optional: faster start-up
 
