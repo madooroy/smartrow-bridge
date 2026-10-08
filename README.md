@@ -3,8 +3,9 @@
 Row on a **SmartRow** with the **Peloton app** - and keep using the SmartRow app at the same time.
 
 The SmartRow pulley only talks to the SmartRow app. The app can broadcast your rowing to a list of other
-apps, but Peloton is not one of them. This bridge fills that gap: a Raspberry Pi holds the only Bluetooth
-connection the pulley allows and re-publishes it as two devices:
+apps, but Peloton is not one of them: the Peloton app can connect to that broadcast, but it reads the data
+wrongly (the distance rowed, for example, climbs far too fast). This bridge fills that gap: a Raspberry Pi
+holds the only Bluetooth connection the pulley allows and re-publishes it as two devices:
 
 - **`PiRower`** - a standard Bluetooth fitness machine (FTMS rower), which the Peloton app can connect to;
 - **`SmartRow`** - a byte-for-byte copy of your pulley, for the SmartRow app (force curves and all).
