@@ -56,8 +56,8 @@ def parse(argv: list[str] | None = None) -> Config:
     p.add_argument("--clone-address", default=_env("SRB_CLONE_ADDRESS"),
                    help="static random address of the pulley clone, top two bits set "
                         "(default: derived from the dongle's MAC)")
-    p.add_argument("--fitness-name", default=_env("SRB_FITNESS_NAME", "Rower"),
-                   help="name Peloton and other FTMS apps see (default: Rower)")
+    p.add_argument("--fitness-name", default=_env("SRB_FITNESS_NAME", "PiRower"),
+                   help="name Peloton and other FTMS apps see (default: PiRower)")
     p.add_argument("--fitness-address", default=_env("SRB_FITNESS_ADDRESS"),
                    help="static random address of the FTMS rower, different from the clone's "
                         "(default: derived from the dongle's MAC)")

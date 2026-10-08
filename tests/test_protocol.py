@@ -201,11 +201,11 @@ class AdvertisingTest(unittest.TestCase):
     PULLEY_MFR = {0x1235: b"07"}  # as advertised by the real pulley
 
     def test_fitness_set_never_mentions_smartrow(self):
-        adv, rsp = advertising.fitness("Rower")
+        adv, rsp = advertising.fitness("PiRower")
         self.assertLessEqual(len(adv), 31)
         self.assertLessEqual(len(rsp), 31)
         self.assertIn(b"\x03\x03" + struct.pack("<H", 0x1826), adv)  # FTMS only
-        self.assertIn(b"\x09Rower", adv)
+        self.assertIn(b"\x09PiRower", adv)
         for payload in (adv, rsp):
             self.assertNotIn(b"SmartRow", payload)
             self.assertNotIn(struct.pack("<H", 0x1234), payload)

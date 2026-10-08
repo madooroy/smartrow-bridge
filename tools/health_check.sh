@@ -104,11 +104,11 @@ check_log "Central -> hci" "adapters bound to the right radios" bad
 # start advertising once the pulley has connected.
 if grep -q "Connected to pulley" <<<"$log"; then
     ok "pulley connected"
-    check_log "Advertising 'SmartRow'" "SmartRow clone advertising" bad
+    check_log "for the SmartRow app" "SmartRow clone advertising" bad
     check_log "for the fitness apps" "fitness rower advertising" bad
 else
     warn "pulley not connected yet - pull the handle to wake it, then rerun"
-    info "(SmartRow and Rower only start advertising after the pulley connects)"
+    info "(SmartRow and PiRower only start advertising after the pulley connects)"
 fi
 
 # Evidence comes from the current run if it has rowed; otherwise from the last run

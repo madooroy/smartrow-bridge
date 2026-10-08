@@ -1,13 +1,21 @@
 # smartrow-bridge
 
-Use a **SmartRow** pulley with the **SmartRow app and a fitness app such as Peloton at the same time**.
+Row on a **SmartRow** with the **Peloton app** - and keep using the SmartRow app at the same time.
 
-A Raspberry Pi holds the only Bluetooth connection the pulley allows and re-publishes it as two devices:
+The SmartRow pulley only talks to the SmartRow app. The app can broadcast your rowing to a list of other
+apps, but Peloton is not one of them. This bridge fills that gap: a Raspberry Pi holds the only Bluetooth
+connection the pulley allows and re-publishes it as two devices:
 
-- **`SmartRow`** - a byte-for-byte copy of your pulley, for the SmartRow app (force curves and all);
-- **`Rower`** - a standard Bluetooth fitness machine (FTMS rower), for Peloton and other apps that support FTMS rowers.
+- **`PiRower`** - a standard Bluetooth fitness machine (FTMS rower), which the Peloton app can connect to;
+- **`SmartRow`** - a byte-for-byte copy of your pulley, for the SmartRow app (force curves and all).
 
 Both apps record the same strokes. Switch the Pi on, pull the handle, open your apps.
+
+**Do you need this?** Only if the app you want is Peloton, or another app that accepts a standard Bluetooth
+rower but that the SmartRow app cannot broadcast to. At the time of writing the SmartRow app broadcasts to
+EXR, Kinomap, Zwift, Bitgym, Regatta, ImersU, Holofit and ErgZone
+([SmartRow's FAQ](https://smartrow.fit/faq-smartrow-app/) has the current list). If your app is on that
+list, the SmartRow app already does the job without any extra hardware.
 
 ```
 SmartRow pulley ──BLE──> Pi built-in radio (central, bleak/BlueZ)
@@ -15,7 +23,7 @@ SmartRow pulley ──BLE──> Pi built-in radio (central, bleak/BlueZ)
                               ├──────────> "SmartRow" ──> tablet / phone running the SmartRow app
                               │ <── the app's commands forwarded to the pulley ──
                               └─ parse → watts / stroke rate / pace / distance / time
-                                           "Rower"   ──> phone / tablet running Peloton (FTMS 0x2AD1)
+                                           "PiRower" ──> phone / tablet running Peloton (FTMS 0x2AD1)
 USB Bluetooth dongle (peripheral, Bumble): two advertising sets, two connections, one GATT server
 ```
 
@@ -88,12 +96,16 @@ sudo bash ~/smartrow-bridge/tools/health_check.sh
 
 ### 4. Pair the apps (once)
 
-1. **SmartRow app**: forget your pulley, then pair the one that appears as **`SmartRow-<number>`** - the same
-   number as before, because the bridge copies the pulley's ID. From then on it reconnects by itself.
-2. **Peloton** (or another FTMS app): add the rower called **`Rower`**.
+The SmartRow app has to be paired again, this time with the Pi's copy of your pulley instead of the pulley
+itself. The copy has the same name and number as the real one, so it is easy to think nothing needs doing.
+
+1. **SmartRow app**: forget (remove) the pulley you have paired now, then pair the one that appears as
+   **`SmartRow-<number>`**. It shows the same number as before, because the bridge copies the pulley's ID,
+   but it is the Pi you are pairing with. From then on it reconnects by itself.
+2. **Peloton** (or another FTMS app): add the rower called **`PiRower`**.
 
 The real pulley no longer shows up in the apps while the bridge is running: the bridge is holding its
-connection.
+connection, so the only `SmartRow-<number>` you can see is the Pi's copy.
 
 ## Everyday use
 
@@ -136,7 +148,7 @@ Common problems:
 - **Both radios "not powered" / nothing happens** - Bluetooth is soft-blocked on a fresh image:
   `sudo rfkill unblock bluetooth` (the installer does this).
 - **The dongle is not found** - `lsusb` should list it; `dmesg | grep -i rtl` should show its firmware loading.
-- **Apps cannot see `SmartRow` / `Rower`** - they only appear after the pulley has connected. Pull the handle.
+- **Apps cannot see `SmartRow` / `PiRower`** - they only appear after the pulley has connected. Pull the handle.
 - **The SmartRow app does not reconnect after you replaced the pulley** - it is a different pulley ID; pair
   the new `SmartRow-<number>` once.
 
@@ -147,7 +159,7 @@ Common problems:
 | Setting | Default | Meaning |
 |---|---|---|
 | `SRB_PULLEY_ADDRESS` | empty | Empty = the first device advertising the SmartRow service; a MAC pins one pulley (use where several SmartRows are in range) |
-| `SRB_FITNESS_NAME` | `Rower` | The name fitness apps see |
+| `SRB_FITNESS_NAME` | `PiRower` | The name fitness apps see |
 | `SRB_CLONE_NAME` | the pulley's name | The name the SmartRow app sees |
 | `SRB_CLONE_ADDRESS`, `SRB_FITNESS_ADDRESS` | derived from the dongle's MAC | Addresses of the two virtual devices: the same on every boot, unique per Pi |
 | `SRB_ADVERTISE_PULLEY_ID` | `1` | Test only: `0` advertises the clone without the pulley ID (manufacturer data), as an iPhone would; change `SRB_CLONE_ADDRESS` too so the app sees a new device |
