@@ -66,7 +66,8 @@ Skip this if your Pi already runs Raspberry Pi OS Lite (64-bit) and you can reac
 
 1. Flash **Raspberry Pi OS Lite (64-bit)** to the microSD card with
    [Raspberry Pi Imager](https://www.raspberrypi.com/software/). In its settings, set a user name and
-   password, enter your Wi-Fi network, and enable SSH.
+   password, enter your Wi-Fi network, and enable SSH. Leave **Raspberry Pi Connect** off: it is Raspberry
+   Pi's service for reaching a Pi from outside your home through their website, and the bridge does not use it.
 2. Put the card in the Pi, plug in the USB Bluetooth dongle and power the Pi on. The first boot takes a
    minute or two.
 3. Connect from your computer: `ssh <user>@<hostname>.local`, with the user and hostname you set in the Imager.
